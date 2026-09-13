@@ -10,7 +10,6 @@ if "GOOGLE_API_KEY" not in st.secrets:
     st.stop()
 
 try:
-    # 初始化 Gemini 客戶端
     api_key = st.secrets["GOOGLE_API_KEY"]
     client = genai.Client(api_key=api_key)
 except Exception as e:
@@ -24,7 +23,7 @@ if "fsm_state" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 2. 定義 RAG 知識庫（內含 165 最新詐騙話術範本）
+# 2. 定義 RAG 知識庫
 RAG_KNOWLEDGE_BASE = [
     {
         "category": "假檢警",
@@ -77,7 +76,7 @@ def get_system_instruction(state, rag_context):
 st.sidebar.markdown("### ⚙️ 系統狀態機監控")
 st.sidebar.info(f"當前狀態：**{st.session_state.fsm_state}**")
 
-if st.sidebar.button("推進到下一個戰術階段"):
+if st.sidebar.button("手動推進到下一個階段"):
     if st.session_state.fsm_state == "STATE_1_TRUST":
         st.session_state.fsm_state = "STATE_2_CRISIS"
     elif st.session_state.fsm_state == "STATE_2_CRISIS":
@@ -95,7 +94,17 @@ user_input = st.chat_input("請輸入您的回覆...")
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # ── 條件判定與安全斷路器 (ConditionChecker) ──
+    # ── 自動狀態機推進邏輯 (基於對話回合數與關鍵字) ──
+    user_msg_count = len([m for m in st.session_state.messages if m["role"] == "user"])
+    
+    # 如果還沒到教練階段，根據對話回合數自動切換狀態
+    if st.session_state.fsm_state != "STATE_3_COACH":
+        if user_msg_count >= 3:
+            st.session_state.fsm_state = "STATE_2_CRISIS"  # 對話超過 3 句自動進入危機期
+        else:
+            st.session_state.fsm_state = "STATE_1_TRUST"
+
+    # 安全斷路器條件判定（若踩雷直接強制切到教練模式）
     if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款"]):
         st.session_state.fsm_state = "STATE_3_COACH"
         coach_reply = "🚨 【安全斷路器啟動】哎呀！您落入陷阱交出了個資！系統已自動切換至教練覆盤模式。"
@@ -105,7 +114,7 @@ if user_input:
     rag_ctx = retrieve_rag_knowledge(user_input)
     current_system_prompt = get_system_instruction(st.session_state.fsm_state, rag_ctx)
 
-    # 組合完整對話與 Prompt 傳給 Gemini 3.6 Flash
+    # 組合完整對話與 Prompt 傳給 Gemini
     try:
         full_contents = f"{current_system_prompt}\n\n"
         for msg in st.session_state.messages:
@@ -118,7 +127,7 @@ if user_input:
         )
         st.session_state.messages.append({"role": "model", "content": response.text})
     except Exception as e:
-        st.error(f"❌ API 呼叫失敗：{e}")
+        st.error(f"❌ API 呼叫失敗（可能額度超限）：{e}")
 
 # 渲染聊天畫面
 for msg in st.session_state.messages:
