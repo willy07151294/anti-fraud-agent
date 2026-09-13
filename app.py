@@ -17,17 +17,14 @@ except Exception as e:
     st.error(f"❌ 初始化 AI 用戶端失敗：{e}")
     st.stop()
 
-# 1. 初始化狀態機變數
+# 1. 初始化狀態機變數與對話紀錄
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "STATE_1_TRUST"  # 初始狀態：建立信任期
 
-# 2. 嚴格防呆初始化對話紀錄：直接給予第一句開場白，不額外呼叫 API 浪費額度
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "model", "content": "喂您好，這裡是某網購客服中心。不好意思深夜打擾您，我們系統剛剛跳出警示，您之前的一筆訂單因為工作人員疏失，被誤設成了『連續扣款』，我們需要趕快協助您處理！"}
-    ]
+    st.session_state.messages = []
 
-# 3. 定義 RAG 知識庫（內含 165 最新詐騙話術範本）
+# 2. 定義 RAG 知識庫（內含 165 最新詐騙話術範本）
 RAG_KNOWLEDGE_BASE = [
     {
         "category": "假檢警",
@@ -41,8 +38,8 @@ RAG_KNOWLEDGE_BASE = [
     },
     {
         "category": "假網購",
-        "keywords": ["分期付款", "ATM", "操作", "客服", "重複扣款", "代號", "88591"],
-        "content": "【165真實案例話術】假冒網購客服，稱工作人員疏失設成連續扣款，需至 ATM 或網銀解除設定或配合代號操作。"
+        "keywords": ["分期付款", "ATM", "操作", "客服", "重複扣款"],
+        "content": "【165真實案例話術】假冒網購客服，稱工作人員疏失設成連續扣款，需至 ATM 或網銀解除設定。"
     }
 ]
 
@@ -55,7 +52,7 @@ def retrieve_rag_knowledge(user_message):
         retrieved.append("【當前情境】標準高壓心理戰：製造焦慮、要求配合調查或限時動作。")
     return "\n".join(retrieved)
 
-# 4. 定義 FSM 狀態機的動態系統提示詞
+# 3. 定義 FSM 狀態機的動態系統提示詞
 def get_system_instruction(state, rag_context):
     if state == "STATE_1_TRUST":
         return (
@@ -89,9 +86,7 @@ if st.sidebar.button("推進到下一個戰術階段"):
 
 if st.sidebar.button("重置演練"):
     st.session_state.fsm_state = "STATE_1_TRUST"
-    st.session_state.messages = [
-        {"role": "model", "content": "喂您好，這裡是某網購客服中心。不好意思深夜打擾您，我們系統剛剛跳出警示，您之前的一筆訂單因為工作人員疏失，被誤設成了『連續扣款』，我們需要趕快協助您處理！"}
-    ]
+    st.session_state.messages = []
     st.rerun()
 
 # 使用者輸入
@@ -101,9 +96,9 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     
     # ── 條件判定與安全斷路器 (ConditionChecker) ──
-    if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款", "88591", "A125865925"]):
+    if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款"]):
         st.session_state.fsm_state = "STATE_3_COACH"
-        coach_reply = "🚨 【安全斷路器啟動】哎呀！您落入陷阱交出了個資或配合指示！系統已自動切換至教練覆盤模式。"
+        coach_reply = "🚨 【安全斷路器啟動】哎呀！您落入陷阱交出了個資！系統已自動切換至教練覆盤模式。"
         st.session_state.messages.append({"role": "model", "content": coach_reply})
 
     # 執行 RAG 檢索
@@ -123,7 +118,7 @@ if user_input:
         )
         st.session_state.messages.append({"role": "model", "content": response.text})
     except Exception as e:
-        st.error(f"❌ API 呼叫失敗或額度超限，請稍候 30 秒再試：{e}")
+        st.error(f"❌ API 呼叫失敗：{e}")
 
 # 渲染聊天畫面
 for msg in st.session_state.messages:
