@@ -55,8 +55,8 @@ def retrieve_rag_knowledge(user_message):
 def get_system_instruction(state, rag_context):
     pacing_rule = (
         "【重要對話互動原則】：\n"
-        "1. 請模擬真實人類在電話或通訊軟體中的說話方式，**絕對不要長篇大論**。\n"
-        "2. 每次回覆控制在 2 至 4 短句內就好，**一次只丟出一個問題或一個步驟**，像真人一樣步步為營。\n"
+        "1. 請模擬真實人類在電話或通訊軟體中的說話方式，絕對不要長篇大論。\n"
+        "2. 每次回覆控制在 2 至 4 短句內就好，一次只丟出一個問題或一個步驟，像真人一樣步步為營。\n"
     )
     
     if state == "STATE_1_TRUST":
@@ -75,10 +75,9 @@ def get_system_instruction(state, rag_context):
         )
     return "你是一個詐騙模擬系統。"
 
-# ── 關鍵修改：初始化對話紀錄，並讓 AI 自動發起第一句話 ──
+# ── 嚴格防呆的初始化：確保 AI 開場白只會在剛進網頁或重置時呼叫一次 ──
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # 自動讓 AI 生成第一句詐騙開場白
     initial_prompt = get_system_instruction("STATE_1_TRUST", "【情境】假冒網購客服來電，指稱發生重複扣款需協助解除。")
     try:
         init_response = client.models.generate_content(
@@ -87,7 +86,6 @@ if "messages" not in st.session_state:
         )
         st.session_state.messages.append({"role": "model", "content": init_response.text})
     except Exception as e:
-        # 若初始化失敗給予預設開場白
         st.session_state.messages.append({"role": "model", "content": "喂您好，這裡是某某網購客服中心，不好意思深夜打擾您，我們系統顯示您的訂單被設成了連續扣款..."})
 
 # 側邊欄監控與手動狀態控制
@@ -121,7 +119,7 @@ if st.session_state.fsm_state != "STATE_3_COACH":
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # 條件判定與安全斷路器 (ConditionChecker)
+        # 條件判定與安全斷路器 (ConditionChecker) - 包含身分證、密碼、匯款、特定代號等
         if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款", "A125865925", "88591"]):
             st.session_state.fsm_state = "STATE_3_COACH"
             st.rerun()
@@ -143,7 +141,7 @@ if st.session_state.fsm_state != "STATE_3_COACH":
             st.session_state.messages.append({"role": "model", "content": response.text})
             st.rerun()
         except Exception as e:
-            st.error(f"❌ API 呼叫失敗：{e}")
+            st.error(f"❌ API 呼叫失敗或額度超限 (429)：請稍候 30 秒再試。詳細錯誤：{e}")
 
 else:
     # 🚨 狀態 3：安全斷路器啟動，進入獨立的「防詐教練結算面板」
