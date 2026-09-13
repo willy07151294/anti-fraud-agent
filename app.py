@@ -1,8 +1,11 @@
 import streamlit as st
 from google import genai
 
+# 頁面基本設定
+st.set_page_config(page_title="AI 詐騙模擬防禦演練平台", page_icon="🛡️", layout="centered")
+
 st.title("🛡️ AI 詐騙模擬防禦演練平台 (MVP)")
-st.write("這是一個結合狀態機與 RAG 動態知識庫的主動式識詐實戰演練平台。")
+st.write("這是一個結合動態心理戰術與防詐教練覆盤的沈浸式實戰演練環境。")
 
 # 檢查是否有成功讀取 Secrets 金鑰
 if "GOOGLE_API_KEY" not in st.secrets:
@@ -10,7 +13,6 @@ if "GOOGLE_API_KEY" not in st.secrets:
     st.stop()
 
 try:
-    # 初始化 Gemini 客戶端
     api_key = st.secrets["GOOGLE_API_KEY"]
     client = genai.Client(api_key=api_key)
 except Exception as e:
@@ -24,12 +26,12 @@ if "fsm_state" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 2. 定義 RAG 知識庫（內含 165 最新詐騙話術範本）
+# 2. 定義 RAG 知識庫
 RAG_KNOWLEDGE_BASE = [
     {
         "category": "假檢警",
-        "keywords": ["帳戶", "洗錢", "偵查不公開", "管收", "公文", "檢察官"],
-        "content": "【165真實案例話術】冒充台北地檢署，宣稱被害人涉及人頭帳戶洗錢，需配合『電話中筆錄』並監管帳戶。"
+        "keywords": ["帳戶", "洗錢", "偵查不公開", "管收", "公文", "檢察官", "身分證", "出生年月日"],
+        "content": "【165真實案例話術】冒充台北地檢署或金融機構，宣稱涉及人頭帳戶洗錢，需配合電話中筆錄並進行身分核對與資金監管。"
     },
     {
         "category": "假投資",
@@ -49,27 +51,30 @@ def retrieve_rag_knowledge(user_message):
         if any(kw in user_message for kw in item["keywords"]):
             retrieved.append(item["content"])
     if not retrieved:
-        retrieved.append("【當前情境】標準高壓心理戰：製造焦慮、要求配合調查或限時動作。")
+        retrieved.append("【當前情境】標準心理戰：語氣從容且帶有引導性，逐步建立情境壓力。")
     return "\n".join(retrieved)
 
-# 3. 定義 FSM 狀態機的動態系統提示詞
+# 3. 定義 FSM 狀態機與對話節奏約束 (解決嘰嘰喳喳、長篇大論的問題)
 def get_system_instruction(state, rag_context):
+    pacing_rule = (
+        "【重要對話互動原則】：\n"
+        "1. 請模擬真實人類在電話或通訊軟體中的說話方式，**絕對不要長篇大論**。\n"
+        "2. 每次回覆控制在 2 至 4 短句內就好，**一次只丟出一個問題或一個步驟**（例如先問名字，等對方回答後再問下一步），像真人一樣步步為營，千萬不要一次講太多資訊。\n"
+    )
+    
     if state == "STATE_1_TRUST":
         return (
             "【當前階段：STATE_1 建立信任期】\n"
-            "你現在是詐騙集團成員。請語氣和善、專業，試圖核對基本資料或建立信任。\n"
+            f"{pacing_rule}"
+            "你現在是詐騙集團成員（例如客服或專員）。請語氣和善、專業，試圖核對基本資料或建立信任。\n"
             f"參考背景知識：{rag_context}"
         )
     elif state == "STATE_2_CRISIS":
         return (
             "【當前階段：STATE_2 拋出危機與焦慮期】\n"
-            "你現在是詐騙集團成員。請立刻轉趨嚴肅與具壓迫感，製造時間壓力與恐慌（如帳戶凍結、刑責威脅）！\n"
+            f"{pacing_rule}"
+            "你現在是詐騙集團成員。請開始帶入危機感（如帳戶異常、交易嘗試），語氣轉為急促、專業但具壓迫感！\n"
             f"參考背景知識：{rag_context}"
-        )
-    elif state == "STATE_3_COACH":
-        return (
-            "【當前階段：STATE_3 防詐教練覆盤模式】\n"
-            "你現在是專業的防詐教育專家。請給予使用者溫暖、專業的覆盤指導，點出剛剛對話中的心理盲點與防詐建議。"
         )
     return "你是一個詐騙模擬系統。"
 
@@ -77,7 +82,7 @@ def get_system_instruction(state, rag_context):
 st.sidebar.markdown("### ⚙️ 系統狀態機監控")
 st.sidebar.info(f"當前狀態：**{st.session_state.fsm_state}**")
 
-if st.sidebar.button("推進到下一個戰術階段"):
+if st.sidebar.button("強制推進到下一個戰術階段"):
     if st.session_state.fsm_state == "STATE_1_TRUST":
         st.session_state.fsm_state = "STATE_2_CRISIS"
     elif st.session_state.fsm_state == "STATE_2_CRISIS":
@@ -89,39 +94,73 @@ if st.sidebar.button("重置演練"):
     st.session_state.messages = []
     st.rerun()
 
-# 使用者輸入
-user_input = st.chat_input("請輸入您的回覆...")
+# ── UI 介面呈現邏輯：區隔「沈浸式對話」與「教練覆盤面板」──
 
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+if st.session_state.fsm_state != "STATE_3_COACH":
+    # 正常對話階段：渲染聊天介面
+    for msg in st.session_state.messages:
+        if msg["role"] != "system":
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+    # 使用者輸入
+    user_input = st.chat_input("請輸入您的回覆...")
+
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # 條件判定與安全斷路器 (ConditionChecker)
+        if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款", "A125865925"]):
+            st.session_state.fsm_state = "STATE_3_COACH"
+            st.rerun()
+
+        # 執行 RAG 檢索與系統提示詞組合
+        rag_ctx = retrieve_rag_knowledge(user_input)
+        current_system_prompt = get_system_instruction(st.session_state.fsm_state, rag_ctx)
+
+        try:
+            full_contents = f"{current_system_prompt}\n\n"
+            for msg in st.session_state.messages:
+                role_label = "使用者" if msg["role"] == "user" else "AI"
+                full_contents += f"{role_label}：{msg['content']}\n"
+
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=full_contents,
+            )
+            st.session_state.messages.append({"role": "model", "content": response.text})
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ API 呼叫失敗：{e}")
+
+else:
+    # 🚨 狀態 3：安全斷路器啟動，進入獨立的「防詐教練結算面板」
+    st.error("🚨 【安全斷路器啟動】偵測到敏感個資外洩，詐騙情境已安全中止！")
     
-    # ── 條件判定與安全斷路器 (ConditionChecker) ──
-    if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款"]):
-        st.session_state.fsm_state = "STATE_3_COACH"
-        coach_reply = "🚨 【安全斷路器啟動】哎呀！您落入陷阱交出了個資！系統已自動切換至教練覆盤模式。"
-        st.session_state.messages.append({"role": "model", "content": coach_reply})
-
-    # 執行 RAG 檢索
-    rag_ctx = retrieve_rag_knowledge(user_input)
-    current_system_prompt = get_system_instruction(st.session_state.fsm_state, rag_ctx)
-
-    # 組合完整對話與 Prompt 傳給 Gemini 3.6 Flash
-    try:
-        full_contents = f"{current_system_prompt}\n\n"
+    with st.expander("📂 點擊檢視本次演練的完整對話紀錄（博弈過程）", expanded=False):
         for msg in st.session_state.messages:
-            role_label = "使用者" if msg["role"] == "user" else "AI"
-            full_contents += f"{role_label}：{msg['content']}\n"
+            role_name = "民眾 (您)" if msg["role"] == "user" else "詐騙 AI"
+            st.markdown(f"**{role_name}**： {msg['content']}")
 
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=full_contents,
-        )
-        st.session_state.messages.append({"role": "model", "content": response.text})
-    except Exception as e:
-        st.error(f"❌ API 呼叫失敗：{e}")
+    st.markdown("---")
+    st.subheader("👨‍🏫 防詐教練深度覆盤與盲點拆解報告")
+    
+    st.markdown("""
+    ### 🧠 心理盲點深度剖析
+    1. **漸進式誘導（Foot-in-the-Door Technique）**：
+       * 詐騙集團從「核對基本資料」到「詢問出生年月日」，最後才切入「身分證字號」。透過微小的配合降低您的戒心，使您在不知不覺中卸下防備。
+    2. **製造焦慮與急迫感**：
+       * 透過「海外異常扣款」、「帳戶遭到嘗試登入」等危機話術，讓大腦瞬間進入緊急應變狀態，因而忽略了查證對方真實身分的機會。
+    3. **權威與善意包裝**：
+       * 對方刻意營造「我是來幫你擋下詐騙的保護者」形象，讓您誤把狼人當成救星。
 
-# 渲染聊天畫面
-for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    ---
+    ### 🛡️ 核心防範守則
+    * **金融機構絕不會在主動來電中索取完整身分證、密碼或驗證碼。**
+    * **遇到任何驚慌失措的情境，謹記三步驟口訣：【停】冷靜思考 ➔ 【掛】果斷掛斷 ➔ 【查】自行撥打官方或 165 專線查證。**
+    """)
+
+    if st.button("🔄 重新開始一場新的防詐演練"):
+        st.session_state.fsm_state = "STATE_1_TRUST"
+        st.session_state.messages = []
+        st.rerun()
