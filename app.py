@@ -19,12 +19,9 @@ except Exception as e:
     st.error(f"❌ 初始化 AI 用戶端失敗：{e}")
     st.stop()
 
-# 1. 初始化狀態機變數與對話紀錄
+# 1. 初始化狀態機變數
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "STATE_1_TRUST"  # 初始狀態：建立信任期
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 # 2. 定義 RAG 知識庫
 RAG_KNOWLEDGE_BASE = [
@@ -54,29 +51,44 @@ def retrieve_rag_knowledge(user_message):
         retrieved.append("【當前情境】標準心理戰：語氣從容且帶有引導性，逐步建立情境壓力。")
     return "\n".join(retrieved)
 
-# 3. 定義 FSM 狀態機與對話節奏約束 (解決嘰嘰喳喳、長篇大論的問題)
+# 3. 定義 FSM 狀態機與對話節奏約束
 def get_system_instruction(state, rag_context):
     pacing_rule = (
         "【重要對話互動原則】：\n"
         "1. 請模擬真實人類在電話或通訊軟體中的說話方式，**絕對不要長篇大論**。\n"
-        "2. 每次回覆控制在 2 至 4 短句內就好，**一次只丟出一個問題或一個步驟**（例如先問名字，等對方回答後再問下一步），像真人一樣步步為營，千萬不要一次講太多資訊。\n"
+        "2. 每次回覆控制在 2 至 4 短句內就好，**一次只丟出一個問題或一個步驟**，像真人一樣步步為營。\n"
     )
     
     if state == "STATE_1_TRUST":
         return (
             "【當前階段：STATE_1 建立信任期】\n"
             f"{pacing_rule}"
-            "你現在是詐騙集團成員（例如客服或專員）。請語氣和善、專業，試圖核對基本資料或建立信任。\n"
+            "你現在是詐騙集團成員（例如網購客服或銀行專員）。請主動撥通電話並以和善語氣開場，試圖核對基本資料或建立信任。\n"
             f"參考背景知識：{rag_context}"
         )
     elif state == "STATE_2_CRISIS":
         return (
             "【當前階段：STATE_2 拋出危機與焦慮期】\n"
             f"{pacing_rule}"
-            "你現在是詐騙集團成員。請開始帶入危機感（如帳戶異常、交易嘗試），語氣轉為急促、專業但具壓迫感！\n"
+            "你現在是詐騙集團成員。請開始帶入危機感，語氣轉為急促、專業但具壓迫感！\n"
             f"參考背景知識：{rag_context}"
         )
     return "你是一個詐騙模擬系統。"
+
+# ── 關鍵修改：初始化對話紀錄，並讓 AI 自動發起第一句話 ──
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    # 自動讓 AI 生成第一句詐騙開場白
+    initial_prompt = get_system_instruction("STATE_1_TRUST", "【情境】假冒網購客服來電，指稱發生重複扣款需協助解除。")
+    try:
+        init_response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=f"{initial_prompt}\n\n請直接撥通電話並說出你的第一句開場白（例如假裝是客服人員打來）。",
+        )
+        st.session_state.messages.append({"role": "model", "content": init_response.text})
+    except Exception as e:
+        # 若初始化失敗給予預設開場白
+        st.session_state.messages.append({"role": "model", "content": "喂您好，這裡是某某網購客服中心，不好意思深夜打擾您，我們系統顯示您的訂單被設成了連續扣款..."})
 
 # 側邊欄監控與手動狀態控制
 st.sidebar.markdown("### ⚙️ 系統狀態機監控")
@@ -89,7 +101,7 @@ if st.sidebar.button("強制推進到下一個戰術階段"):
         st.session_state.fsm_state = "STATE_3_COACH"
     st.rerun()
 
-if st.sidebar.button("重置演練"):
+if st.sidebar.button("重置演練 (重新接聽電話)"):
     st.session_state.fsm_state = "STATE_1_TRUST"
     st.session_state.messages = []
     st.rerun()
@@ -110,7 +122,7 @@ if st.session_state.fsm_state != "STATE_3_COACH":
         st.session_state.messages.append({"role": "user", "content": user_input})
         
         # 條件判定與安全斷路器 (ConditionChecker)
-        if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款", "A125865925"]):
+        if any(k in user_input for k in ["身分證", "驗證碼", "密碼", "匯款", "A125865925", "88591"]):
             st.session_state.fsm_state = "STATE_3_COACH"
             st.rerun()
 
@@ -135,7 +147,7 @@ if st.session_state.fsm_state != "STATE_3_COACH":
 
 else:
     # 🚨 狀態 3：安全斷路器啟動，進入獨立的「防詐教練結算面板」
-    st.error("🚨 【安全斷路器啟動】偵測到敏感個資外洩，詐騙情境已安全中止！")
+    st.error("🚨 【安全斷路器啟動】偵測到配合詐騙指示或個資外洩，詐騙情境已安全中止！")
     
     with st.expander("📂 點擊檢視本次演練的完整對話紀錄（博弈過程）", expanded=False):
         for msg in st.session_state.messages:
@@ -147,16 +159,16 @@ else:
     
     st.markdown("""
     ### 🧠 心理盲點深度剖析
-    1. **漸進式誘導（Foot-in-the-Door Technique）**：
-       * 詐騙集團從「核對基本資料」到「詢問出生年月日」，最後才切入「身分證字號」。透過微小的配合降低您的戒心，使您在不知不覺中卸下防備。
+    1. **漸進式誘導與代號配合**：
+       * 詐騙集團透過引導您準備卡片、抄寫解除代號（如 88591）並準備接聽下一通電話，讓您在沒有交出密碼的情況下，依然落入誘導操作的陷阱。
     2. **製造焦慮與急迫感**：
-       * 透過「海外異常扣款」、「帳戶遭到嘗試登入」等危機話術，讓大腦瞬間進入緊急應變狀態，因而忽略了查證對方真實身分的機會。
-    3. **權威與善意包裝**：
-       * 對方刻意營造「我是來幫你擋下詐騙的保護者」形象，讓您誤把狼人當成救星。
+       * 宣稱今晚會自動扣款，強迫大腦進入緊急應變狀態，因而降低了對來電真實性的懷疑。
+    3. **轉接手法（二次詐騙）**：
+       * 利用「轉接給銀行專員」的說法，降低民眾對第一通電話的戒心。
 
     ---
     ### 🛡️ 核心防範守則
-    * **金融機構絕不會在主動來電中索取完整身分證、密碼或驗證碼。**
+    * **金融機構絕不會要求您抄寫代號並轉接給其他專員操作 ATM 或網銀。**
     * **遇到任何驚慌失措的情境，謹記三步驟口訣：【停】冷靜思考 ➔ 【掛】果斷掛斷 ➔ 【查】自行撥打官方或 165 專線查證。**
     """)
 
