@@ -32,15 +32,15 @@ if user_input:
         coach_reply = "🚨 【安全斷路器啟動】哎呀！您剛剛落入陷阱交出了個資！防詐教練點評：真實情況下，檢警絕不會透過電話索取驗證碼..."
         st.session_state.messages.append({"role": "model", "content": coach_reply})
     else:
-        # 2. 呼叫 Gemini 2.0 Flash 模型
+        # 2. 呼叫最新的 Gemini 3.6 Flash 模型
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-3.6-flash",
                 contents=user_input,
             )
             st.session_state.messages.append({"role": "model", "content": response.text})
         except Exception as e:
-            st.error(f"❌ API 呼叫失敗，請檢查金鑰是否正確或額度是否異常。詳細錯誤：{e}")
+            st.error(f"❌ API 呼叫失敗：{e}")
 
 # 渲染聊天畫面
 for msg in st.session_state.messages:
