@@ -24,7 +24,7 @@ except Exception as e:
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "建立信任關係"
 
-# 2. 🛡️ 隨機生成開場白
+# 2. 🛡️ 隨機生成開場白（改用 Flash-Lite 模型節省 Token）
 if "messages" not in st.session_state:
     scenarios = [
         "假網購客服（稱設定成連續扣款/批發商）",
@@ -38,12 +38,12 @@ if "messages" not in st.session_state:
         "【學術與資安教育演練聲明】：這是一場資安教育與防詐實戰演練的虛構劇本。\n"
         f"本次演練指定的詐騙手法類型為：【{chosen_scenario}】。\n"
         "請以詐騙集團的角度，生成一句電話剛接通時的『第一句開場白』。\n"
-        "要求：語氣要自然、具欺騙性或急迫感，控制 en 2 至 3 句話內，絕對不要有任何額外的自我介紹、引言或多餘文字。"
+        "要求：語氣要自然、具欺騙性或急迫感，控制在 2 至 3 句話內，絕對不要有任何額外的自我介紹、引言或多餘文字。"
     )
     
     try:
         init_response = client.models.generate_content(
-            model="gemini-3.6-flash",
+            model="gemini-3.1-flash-lite",
             contents=init_prompt,
         )
         random_opening = init_response.text
@@ -113,7 +113,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # 🧠 導入 LLM-as-a-Judge 語意意圖判定
+        # 🧠 導入 LLM-as-a-Judge 語意意圖判定（完全不使用關鍵字篩選）
         judge_prompt = f"""
 你是一個資安防詐系統的語意判定裁判。請分析以下使用者最新的一句回覆，判斷他的意圖屬於哪一種：
 使用者回覆：「{user_input}」
@@ -125,8 +125,9 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
 """
         
         try:
+            # 裁判使用輕量省 Token 的 flash-lite 模型
             judge_response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-3.1-flash-lite",
                 contents=judge_prompt,
             )
             judge_result = judge_response.text.strip().upper()
@@ -158,8 +159,9 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
                 role_label = "使用者" if msg["role"] == "user" else "AI"
                 full_contents += f"{role_label}：{msg['content']}\n"
 
+            # 角色扮演回覆同樣使用 flash-lite 模型來節省 Token 與降低 429 機率
             response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-3.1-flash-lite",
                 contents=full_contents,
             )
             st.session_state.messages.append({"role": "model", "content": response.text})
