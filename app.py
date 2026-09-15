@@ -85,9 +85,19 @@ def get_system_instruction(state):
         )
     return "You are an educational simulation roleplay bot."
 
-# 側邊欄狀態監控與重置
+# 💡 建立中英文狀態對照字典，方便評審一眼看懂
+state_display_names = {
+    "STATE_1_TRUST": "🤝 階段一：建立信任關係",
+    "STATE_2_CRISIS": "⚠️ 階段二：拋出危機與誘因",
+    "STATE_3_CLOSING": "🚨 階段三：核心收網與索取個資",
+    "STATE_4_SUCCESS": "🏆 階段四：識詐成功（防守得分）",
+    "STATE_5_FAILED": "❌ 階段五：模擬被騙（教練覆盤）"
+}
+
+# 側邊欄狀態監控與重置（使用中文顯示當前狀態）
 st.sidebar.markdown("### ⚙️ 系統狀態機監控")
-st.sidebar.info(f"當前狀態：**{st.session_state.fsm_state}**")
+current_display_name = state_display_names.get(st.session_state.fsm_state, st.session_state.fsm_state)
+st.sidebar.info(f"當前狀態：\n**{current_display_name}**")
 
 if st.sidebar.button("🔄 重置演練"):
     st.session_state.fsm_state = "STATE_1_TRUST"
@@ -113,7 +123,7 @@ if current_state in ["STATE_1_TRUST", "STATE_2_CRISIS", "STATE_3_CLOSING"]:
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # 🧠 核心升級：導入 LLM-as-a-Judge 語意意圖判定（取代死板的關鍵字清單）
+        # 🧠 核心升級：導入 LLM-as-a-Judge 語意意圖判定
         judge_prompt = f"""
 你是一個資安防詐系統的語意判定裁判。請分析以下使用者最新的一句回覆，判斷他的意圖屬於哪一種：
 使用者回覆：「{user_input}」
@@ -131,7 +141,7 @@ if current_state in ["STATE_1_TRUST", "STATE_2_CRISIS", "STATE_3_CLOSING"]:
             )
             judge_result = judge_response.text.strip().upper()
         except Exception as e:
-            judge_result = "CONTINUE" # 萬一判定 API 失敗，預設繼續對話
+            judge_result = "CONTINUE"
 
         # 根據 LLM 判定的結果切換狀態
         if "SUCCESS" in judge_result and current_state in ["STATE_1_TRUST", "STATE_2_CRISIS"]:
