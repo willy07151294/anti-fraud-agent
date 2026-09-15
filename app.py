@@ -28,7 +28,7 @@ except Exception as e:
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "建立信任關係"
 
-# 2. 🛡️ 隨機生成開場白（使用穩定的 llama-3.1-8b-instant 模型）
+# 2. 🛡️ 隨機生成開場白（使用正確的 llama-3.3-70b-versatile 模型）
 if "messages" not in st.session_state:
     scenarios = [
         "網購客服人員（通知消費者訂單被誤設為連續扣款/批發商）",
@@ -48,7 +48,7 @@ if "messages" not in st.session_state:
     
     try:
         init_response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": init_prompt}],
             temperature=0.7,
         )
@@ -132,7 +132,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         
         try:
             judge_response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": judge_prompt}],
                 temperature=0.1,
             )
@@ -166,7 +166,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
                 formatted_messages.append({"role": r, "content": msg["content"]})
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 messages=formatted_messages,
                 temperature=0.7,
             )
