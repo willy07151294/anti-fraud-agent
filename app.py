@@ -43,7 +43,7 @@ if "messages" not in st.session_state:
     
     try:
         init_response = client.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model="gemini-2.0-flash",
             contents=init_prompt,
         )
         random_opening = init_response.text
@@ -127,7 +127,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         try:
             # 裁判使用輕量省 Token 的 flash-lite 模型
             judge_response = client.models.generate_content(
-                model="gemini-3.1-flash-lite",
+                model="gemini-2.0-flash",
                 contents=judge_prompt,
             )
             judge_result = judge_response.text.strip().upper()
@@ -161,7 +161,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
 
             # 角色扮演回覆同樣使用 flash-lite 模型來節省 Token 與降低 429 機率
             response = client.models.generate_content(
-                model="gemini-3.1-flash-lite",
+                model="gemini-2.0-flash",
                 contents=full_contents,
             )
             st.session_state.messages.append({"role": "model", "content": response.text})
