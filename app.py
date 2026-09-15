@@ -6,7 +6,7 @@ import random
 st.set_page_config(page_title="AI 詐騙模擬防禦演練平台", page_icon="🛡️", layout="centered")
 
 st.title("🛡️ AI 詐騙模擬防禦演練平台 (MVP)")
-st.write("這是一個基於 5 階段狀態機、LLM 語意意圖判定與 Groq Llama 3 架構的沈浸式防詐教育演練平台。")
+st.write("這是一個基於 5 階段狀態機、LLM 語意意圖判定與 Groq 架構的沈浸式防詐教育演練平台。")
 
 # 檢查是否有成功讀取 Groq 金鑰
 if "GROQ_API_KEY" not in st.secrets:
@@ -28,7 +28,7 @@ except Exception as e:
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "建立信任關係"
 
-# 2. 🛡️ 隨機生成開場白（使用 Groq 70B 模型）
+# 2. 🛡️ 隨機生成開場白（使用 Groq 主力大模型）
 if "messages" not in st.session_state:
     scenarios = [
         "假網購客服（稱設定成連續扣款/批發商）",
@@ -47,7 +47,7 @@ if "messages" not in st.session_state:
     
     try:
         init_response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": init_prompt}],
             temperature=0.8,
         )
@@ -106,7 +106,7 @@ current_state = st.session_state.fsm_state
 # 模式 A：進行中的互動對話階段
 if current_state in ["建立信任關係", "拋出危機與誘因", "核心收網與索取個資"]:
     
-    # 渲染對話泡泡（注意 Groq/OpenAI 格式的 role 是 assistant）
+    # 渲染對話泡泡
     for msg in st.session_state.messages:
         if msg["role"] != "system":
             display_role = "assistant" if msg["role"] == "model" else msg["role"]
@@ -119,7 +119,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # 🧠 導入 LLM-as-a-Judge 語意意圖判定（完全不使用關鍵字篩選）
+        # 🧠 導入 LLM-as-a-Judge 語意意圖判定
         judge_prompt = f"""
 你是一個資安防詐系統的語意判定裁判。請分析以下使用者最新的一句回覆，判斷他的意圖屬於哪一種：
 使用者回覆：「{user_input}」
@@ -132,7 +132,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         
         try:
             judge_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "user", "content": judge_prompt}],
                 temperature=0.1,
             )
@@ -160,14 +160,13 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         current_system_prompt = get_system_instruction(st.session_state.fsm_state)
 
         try:
-            # 組合 Groq 支援的訊息格式
             formatted_messages = [{"role": "system", "content": current_system_prompt}]
             for msg in recent_messages:
                 r = "assistant" if msg["role"] == "model" else msg["role"]
                 formatted_messages.append({"role": r, "content": msg["content"]})
 
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=formatted_messages,
                 temperature=0.7,
             )
