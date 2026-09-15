@@ -1,30 +1,34 @@
 import streamlit as st
-from google import genai
+from openai import OpenAI
 import random
 
 # 頁面基本設定
 st.set_page_config(page_title="AI 詐騙模擬防禦演練平台", page_icon="🛡️", layout="centered")
 
 st.title("🛡️ AI 詐騙模擬防禦演練平台 (MVP)")
-st.write("這是一個基於 5 階段狀態機與 LLM 語意意圖判定的沈浸式防詐教育演練平台。")
+st.write("這是一個基於 5 階段狀態機、LLM 語意意圖判定與 Groq Llama 3 架構的沈浸式防詐教育演練平台。")
 
-# 檢查是否有成功讀取 Secrets 金鑰
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("❌ 找不到 GOOGLE_API_KEY！請檢查 Streamlit Cloud 的 Settings -> Secrets 是否正確設定。")
+# 檢查是否有成功讀取 Groq 金鑰
+if "GROQ_API_KEY" not in st.secrets:
+    st.error("❌ 找不到 GROQ_API_KEY！請檢查 Streamlit Cloud 的 Settings -> Secrets 是否正確設定。")
     st.stop()
 
 try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    client = genai.Client(api_key=api_key)
+    api_key = st.secrets["GROQ_API_KEY"]
+    # 初始化 Groq 用戶端（透過 OpenAI 相容格式）
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
 except Exception as e:
-    st.error(f"❌ 初始化 AI 用戶端失敗：{e}")
+    st.error(f"❌ 初始化 Groq AI 用戶端失敗：{e}")
     st.stop()
 
 # 1. 初始化狀態機變數 (直接使用純中文作為狀態代號)
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "建立信任關係"
 
-# 2. 🛡️ 隨機生成開場白（改用 Flash-Lite 模型節省 Token）
+# 2. 🛡️ 隨機生成開場白（使用 Groq 70B 模型）
 if "messages" not in st.session_state:
     scenarios = [
         "假網購客服（稱設定成連續扣款/批發商）",
@@ -42,13 +46,14 @@ if "messages" not in st.session_state:
     )
     
     try:
-        init_response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=init_prompt,
+        init_response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": init_prompt}],
+            temperature=0.8,
         )
-        random_opening = init_response.text
+        random_opening = init_response.choices[0].message.content.strip()
         st.session_state.messages = [
-            {"role": "model", "content": random_opening}
+            {"role": "assistant", "content": random_opening}
         ]
     except Exception as e:
         st.error(f"❌ 初始化開場白 API 呼叫失敗：{e}")
@@ -101,10 +106,11 @@ current_state = st.session_state.fsm_state
 # 模式 A：進行中的互動對話階段
 if current_state in ["建立信任關係", "拋出危機與誘因", "核心收網與索取個資"]:
     
-    # 渲染對話泡泡
+    # 渲染對話泡泡（注意 Groq/OpenAI 格式的 role 是 assistant）
     for msg in st.session_state.messages:
         if msg["role"] != "system":
-            with st.chat_message(msg["role"]):
+            display_role = "assistant" if msg["role"] == "model" else msg["role"]
+            with st.chat_message(display_role):
                 st.write(msg["content"])
 
     # 使用者輸入
@@ -125,12 +131,12 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
 """
         
         try:
-            # 裁判使用輕量省 Token 的 flash-lite 模型
-            judge_response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=judge_prompt,
+            judge_response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": judge_prompt}],
+                temperature=0.1,
             )
-            judge_result = judge_response.text.strip().upper()
+            judge_result = judge_response.choices[0].message.content.strip().upper()
         except Exception as e:
             judge_result = "CONTINUE"
 
@@ -154,20 +160,22 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         current_system_prompt = get_system_instruction(st.session_state.fsm_state)
 
         try:
-            full_contents = f"{current_system_prompt}\n\n"
+            # 組合 Groq 支援的訊息格式
+            formatted_messages = [{"role": "system", "content": current_system_prompt}]
             for msg in recent_messages:
-                role_label = "使用者" if msg["role"] == "user" else "AI"
-                full_contents += f"{role_label}：{msg['content']}\n"
+                r = "assistant" if msg["role"] == "model" else msg["role"]
+                formatted_messages.append({"role": r, "content": msg["content"]})
 
-            # 角色扮演回覆同樣使用 flash-lite 模型來節省 Token 與降低 429 機率
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=full_contents,
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=formatted_messages,
+                temperature=0.7,
             )
-            st.session_state.messages.append({"role": "model", "content": response.text})
+            model_reply = response.choices[0].message.content.strip()
+            st.session_state.messages.append({"role": "model", "content": model_reply})
             st.rerun()
         except Exception as e:
-            st.error(f"❌ API 呼叫失敗（可能額度超限）：{e}")
+            st.error(f"❌ API 呼叫失敗：{e}")
 
 # 模式 B：防守成功結算面板 (識詐成功)
 elif current_state == "識詐成功":
