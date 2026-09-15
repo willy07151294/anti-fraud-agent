@@ -6,7 +6,7 @@ import random
 st.set_page_config(page_title="AI 詐騙模擬防禦演練平台", page_icon="🛡️", layout="centered")
 
 st.title("🛡️ AI 詐騙模擬防禦演練平台 (MVP)")
-st.write("這是一個基於 5 階段狀態機與動態情境博弈架構的沈浸式防詐教育演練平台。")
+st.write("這是一個基於 5 階段狀態機與 LLM 語意意圖判定的沈浸式防詐教育演練平台。")
 
 # 檢查是否有成功讀取 Secrets 金鑰
 if "GOOGLE_API_KEY" not in st.secrets:
@@ -24,7 +24,7 @@ except Exception as e:
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "STATE_1_TRUST"
 
-# 2. 🛡️ 關鍵最佳化：強力隨機生成開場白（不使用假資料備用，失敗直接顯示真實 API 錯誤）
+# 2. 🛡️ 隨機生成開場白
 if "messages" not in st.session_state:
     scenarios = [
         "假網購客服（稱設定成連續扣款/批發商）",
@@ -113,26 +113,42 @@ if current_state in ["STATE_1_TRUST", "STATE_2_CRISIS", "STATE_3_CLOSING"]:
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # 1. 檢查是否觸發「識詐成功 (State 4)」條件
-        success_keywords = ["詐騙", "報警", "不理你", "掛電話", "再見", "不用了", "假的", "檢舉"]
-        if any(k in user_input for k in success_keywords) and current_state in ["STATE_1_TRUST", "STATE_2_CRISIS"]:
+        # 🧠 核心升級：導入 LLM-as-a-Judge 語意意圖判定（取代死板的關鍵字清單）
+        judge_prompt = f"""
+你是一個資安防詐系統的語意判定裁判。請分析以下使用者最新的一句回覆，判斷他的意圖屬於哪一種：
+使用者回覆：「{user_input}」
+
+請嚴格根據語意輸出以下其中一個純字串（不要有其他多餘文字）：
+1. 輸出 "SUCCESS"：如果使用者展現出高度警覺、識破詐騙、拒絕配合、罵人或揚言報警/掛電話。
+2. 輸出 "FAILED"：如果使用者不小心透露了個資（如身分證、帳號、密碼、餘額），或者表示願意配合操作、輸入代碼、匯款、照做。
+3. 輸出 "CONTINUE"：如果使用者只是普通對話、詢問、打哈哈，尚未明顯展現防守成功或落入陷阱。
+"""
+        
+        try:
+            judge_response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=judge_prompt,
+            )
+            judge_result = judge_response.text.strip().upper()
+        except Exception as e:
+            judge_result = "CONTINUE" # 萬一判定 API 失敗，預設繼續對話
+
+        # 根據 LLM 判定的結果切換狀態
+        if "SUCCESS" in judge_result and current_state in ["STATE_1_TRUST", "STATE_2_CRISIS"]:
             st.session_state.fsm_state = "STATE_4_SUCCESS"
             st.rerun()
-
-        # 2. 檢查是否觸發「模擬被騙 / 斷路器 (State 5)」條件
-        fail_keywords = ["身分證", "驗證碼", "密碼", "匯款", "88591", "A125865925", "轉帳", "餘額", "好，我照做"]
-        if any(k in user_input for k in fail_keywords):
+        elif "FAILED" in judge_result:
             st.session_state.fsm_state = "STATE_5_FAILED"
             st.rerun()
 
-        # 3. 自動狀態機推進邏輯
+        # 自動狀態機推進邏輯（基於對話回合數）
         user_msg_count = len([m for m in st.session_state.messages if m["role"] == "user"])
-        if user_msg_count == 2:
+        if user_msg_count == 2 and current_state == "STATE_1_TRUST":
             st.session_state.fsm_state = "STATE_2_CRISIS"
-        elif user_msg_count >= 3:
+        elif user_msg_count >= 3 and current_state == "STATE_2_CRISIS":
             st.session_state.fsm_state = "STATE_3_CLOSING"
 
-        # 4. Token 瘦身機制：滑動視窗（Sliding Window）
+        # Token 瘦身機制：滑動視窗（Sliding Window）
         recent_messages = st.session_state.messages[-4:]
         current_system_prompt = get_system_instruction(st.session_state.fsm_state)
 
