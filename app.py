@@ -28,7 +28,7 @@ except Exception as e:
 if "fsm_state" not in st.session_state:
     st.session_state.fsm_state = "建立信任關係"
 
-# 2. 🛡️ 隨機生成開場白（使用安全包裝的 Prompt 避免被審查攔截）
+# 2. 🛡️ 隨機生成開場白（使用經典穩定的 llama3-8b-8192 模型）
 if "messages" not in st.session_state:
     scenarios = [
         "網購客服人員（通知消費者訂單被誤設為連續扣款/批發商）",
@@ -48,7 +48,7 @@ if "messages" not in st.session_state:
     
     try:
         init_response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama3-8b-8192",
             messages=[{"role": "user", "content": init_prompt}],
             temperature=0.7,
         )
@@ -60,7 +60,7 @@ if "messages" not in st.session_state:
         st.error(f"❌ 初始化開場白 API 呼叫失敗：{e}")
         st.stop()
 
-# 3. 定義狀態機的動態系統提示詞（使用安全且符合教育演練的語氣包裝）
+# 3. 定義狀態機的動態系統提示詞
 def get_system_instruction(state):
     safety_bypass_rule = (
         "【資安防禦教育演練系統指令】：\n"
@@ -90,7 +90,7 @@ def get_system_instruction(state):
         )
     return "You are an educational simulation roleplay bot."
 
-# 側邊欄狀態監控與重置（直接顯示純中文）
+# 側邊欄狀態監控與重置
 st.sidebar.markdown("### ⚙️ 系統狀態機監控")
 st.sidebar.info(f"當前狀態：\n**{st.session_state.fsm_state}**")
 
@@ -132,7 +132,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
         
         try:
             judge_response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama3-8b-8192",
                 messages=[{"role": "user", "content": judge_prompt}],
                 temperature=0.1,
             )
@@ -166,7 +166,7 @@ if current_state in ["建立信任關係", "拋出危機與誘因", "核心收�
                 formatted_messages.append({"role": r, "content": msg["content"]})
 
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama3-8b-8192",
                 messages=formatted_messages,
                 temperature=0.7,
             )
