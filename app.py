@@ -6,7 +6,7 @@ import random
 st.set_page_config(page_title="AI 詐騙模擬防禦演練平台", page_icon="🛡️", layout="centered")
 
 st.title("🛡️ AI 詐騙模擬防禦演練平台 (MVP)")
-st.write("這是一個基於 5 階段狀態機與 LLM 語意意圖判定的沈浸式防詐教育演練平台。")
+st.write("這是一個基於 3 階段狀態機與 LLM 語意意圖判定的沈浸式防詐教育演練平台。")
 
 # 檢查是否有成功讀取 Secrets 金鑰
 if "GOOGLE_API_KEY" not in st.secrets:
