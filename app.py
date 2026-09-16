@@ -88,7 +88,7 @@ def get_system_instruction(state):
         return (
             f"{safety_bypass_rule}\n"
             "【當前防導宣導階段：核心收網與行動誘導】\n"
-            "請用詐騙集團常見的劇情誘答我，如果我有上當就立刻中止，沒有的話請繼續！"
+            "請嘗試用詐騙集團常見的劇情誘答我！"
         )
     return "You are an educational simulation roleplay bot."
 
